@@ -1,0 +1,26 @@
+[project]
+name = "paper_fetcher"
+version = "0.1.0"
+description = "fetching the public papers"
+authors = [
+    {name = "krishna", email = "krishnagun945@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["typer (>=0.16.0,<0.17.0)"]
+[project.scripts]
+paper-fetcher = "paper_fetcher.main:app"
+
+[tool.poetry]
+packages = [{ include = "paper_fetcher" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+mypy = "^1.16.1"
+black = "^25.1.0"
+isort = "^6.0.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
