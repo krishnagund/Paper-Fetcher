@@ -35,14 +35,18 @@ results.csv
 How to Install and Run
 
 Step 1: Clone the Repository
+
   ->git clone https://github.com/krishnagund/Paper-Fetcher
+
   ->cd paper-fetcher
 
 
 Step 2: Install Dependencies Using Poetry
+
   ->poetry install
 
 Step 3: Run the Program
+
    poetry run get-papers-list "machine learning" --file papers.csv
 
 #Replace the machine learning with the topic that u want 
