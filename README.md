@@ -7,18 +7,24 @@ This project helps you fetch and organize publicly available research papers (e.
 PAPER FETCHER
 
 .mypy_cache/
-├──3.11
-├──gitignore
+
+  ->3.11
+   
+  ->gitignore
 
 paper_fetcher/
-│
-├── __init__.py
-├── main.py    
-├── fetcher.py 
-└── _pycache_
+
+  ->__init__.py
+
+  ->main.py 
+
+  ->fetcher.py 
+
+  ->_pycache_
 
 Tests
-├──test.py
+
+   ->test.py
 
 pyproject.toml
 
