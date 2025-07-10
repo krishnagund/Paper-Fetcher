@@ -1,8 +1,7 @@
-# paper_fetcher/fetcher.py
-
 import requests
 from typing import List, Dict
 from bs4 import BeautifulSoup
+import re
 
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
@@ -28,39 +27,57 @@ def fetch_details(pubmed_ids: List[str]) -> List[Dict]:
     response = requests.get(url, params=params)
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.content, "lxml")
+    soup = BeautifulSoup(response.content, "lxml-xml")  # safer for XML
     results = []
 
-    for article in soup.find_all("pubmedarticle"):
-        pmid = article.pmid.text
-        title = article.articletitle.text if article.articletitle else ""
-        pub_date_tag = article.find("pubdate")
+    ACADEMIC_KEYWORDS = ["university", "institute", "college", "school", "hospital", "academy","department"]
+    COMPANY_KEYWORDS = ["pharma", "biotech", "inc", "corp", "ltd", "gmbh", "co."]
+
+    for article in soup.find_all("PubmedArticle"):
+        pmid = article.PMID.text if article.PMID else "N/A"
+        title = article.Article.ArticleTitle.text if article.Article and article.Article.ArticleTitle else "N/A"
+
+        # Date parsing
+        pub_date_tag = article.find("PubDate")
         pub_date = "N/A"
         if pub_date_tag:
-            year = pub_date_tag.find("year")
-            month = pub_date_tag.find("month")
+            year = pub_date_tag.find("Year")
+            month = pub_date_tag.find("Month")
             pub_date = f"{year.text if year else ''}-{month.text if month else ''}"
 
-        authors_info = article.find_all("author")
         non_academic_authors = []
         company_affiliations = []
         corresponding_email = "N/A"
 
-        for author in authors_info:
-            affiliation = author.find("affiliation")
-            if affiliation and affiliation.text:
-                affil_text = affiliation.text.lower()
-                if any(company in affil_text for company in ["pharma", "biotech", "inc", "corp", "ltd", "gmbh"]):
-                    last = author.find("lastname").text if author.find("lastname") else ""
-                    fore = author.find("forename").text if author.find("forename") else ""
-                    non_academic_authors.append(f"{fore} {last}".strip())
-                    company_affiliations.append(affiliation.text)
+        authors = article.find_all("Author")
 
-                    # Email heuristic
-                    if "@" in affil_text and corresponding_email == "N/A":
-                        for word in affiliation.text.split():
-                            if "@" in word:
-                                corresponding_email = word.strip("().;,")  # clean punctuation
+        for author in authors:
+            last = author.find("LastName").text if author.find("LastName") else ""
+            fore = author.find("ForeName").text if author.find("ForeName") else ""
+            fullname = f"{fore} {last}".strip()
+
+            affil_tag = author.find("AffiliationInfo")
+            if not affil_tag:
+                continue
+
+            affil_text = affil_tag.text.lower()
+            affil_orig = affil_tag.text.strip()
+
+            # Heuristic: if none of the academic keywords appear, it's non-academic
+            is_academic = any(keyword in affil_text for keyword in ACADEMIC_KEYWORDS)
+            is_company = any(keyword in affil_text for keyword in COMPANY_KEYWORDS)
+
+            if not is_academic:
+                non_academic_authors.append(fullname)
+
+                if is_company:
+                    company_affiliations.append(affil_orig)
+
+                # Email detection
+                if "@" in affil_text and corresponding_email == "N/A":
+                    match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", affil_orig)
+                    if match:
+                        corresponding_email = match.group()
 
         if non_academic_authors:
             results.append({
