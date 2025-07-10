@@ -1,92 +1,100 @@
 import requests
-from typing import List, Dict
+from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import re
 
-BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+PUBMED_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
-def fetch_pubmed_ids(query: str, retmax: int = 50) -> List[str]:
-    url = f"{BASE_URL}esearch.fcgi"
+def search_pubmed(query: str, max_results: int = 50) -> List[str]:
+    
+   # Sends a query to the PubMed database and returns a list of article IDs.
+    
+    search_url = f"{PUBMED_BASE}esearch.fcgi"
     params = {
         "db": "pubmed",
         "term": query,
-        "retmax": retmax,
+        "retmax": max_results,
         "retmode": "json"
     }
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    return response.json()["esearchresult"]["idlist"]
+    res = requests.get(search_url, params=params)
+    res.raise_for_status()
+    return res.json().get("esearchresult", {}).get("idlist", [])
 
-def fetch_details(pubmed_ids: List[str]) -> List[Dict]:
-    url = f"{BASE_URL}efetch.fcgi"
-    params = {
+
+def extract_article_data(pmids: List[str]) -> List[Dict[str, str]]:
+
+    #Given a list of PubMed IDs, fetch and parse article metadata including non-academic authors, company links, and contact emails.
+
+    
+    fetch_url = f"{PUBMED_BASE}efetch.fcgi"
+    response = requests.get(fetch_url, params={
         "db": "pubmed",
-        "id": ",".join(pubmed_ids),
+        "id": ",".join(pmids),
         "retmode": "xml"
-    }
-    response = requests.get(url, params=params)
+    })
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.content, "lxml-xml")  # safer for XML
-    results = []
+    xml = BeautifulSoup(response.content, "lxml-xml")
+    final_data: List[Dict[str, str]] = []
 
-    ACADEMIC_KEYWORDS = ["university", "institute", "college", "school", "hospital", "academy","department"]
-    COMPANY_KEYWORDS = ["pharma", "biotech", "inc", "corp", "ltd", "gmbh", "co."]
+    academic_terms = ["university", "institute", "college", "school", "hospital", "academy", "department"]
+    business_terms = ["pharma", "biotech", "inc", "corp", "ltd", "gmbh", "co."]
 
-    for article in soup.find_all("PubmedArticle"):
-        pmid = article.PMID.text if article.PMID else "N/A"
-        title = article.Article.ArticleTitle.text if article.Article and article.Article.ArticleTitle else "N/A"
+    for entry in xml.find_all("PubmedArticle"):
+        pmid = entry.PMID.text if entry.PMID else "N/A"
 
-        # Date parsing
-        pub_date_tag = article.find("PubDate")
+        title_tag = entry.find("ArticleTitle")
+        article_title = title_tag.text if title_tag else "N/A"
+
+        # Try to get the publication date (year and month)
+        date_block = entry.find("PubDate")
         pub_date = "N/A"
-        if pub_date_tag:
-            year = pub_date_tag.find("Year")
-            month = pub_date_tag.find("Month")
-            pub_date = f"{year.text if year else ''}-{month.text if month else ''}"
+        if date_block:
+            y = date_block.find("Year")
+            m = date_block.find("Month")
+            pub_date = f"{y.text if y else ''}-{m.text if m else ''}"
 
-        non_academic_authors = []
-        company_affiliations = []
-        corresponding_email = "N/A"
+        non_academic: List[str] = []
+        companies: List[str] = []
+        contact_email: str = "N/A"
 
-        authors = article.find_all("Author")
+        authors = entry.find_all("Author")
 
-        for author in authors:
-            last = author.find("LastName").text if author.find("LastName") else ""
-            fore = author.find("ForeName").text if author.find("ForeName") else ""
-            fullname = f"{fore} {last}".strip()
+        for auth in authors:
+            first = auth.find("ForeName")
+            last = auth.find("LastName")
+            full_name = f"{first.text if first else ''} {last.text if last else ''}".strip()
 
-            affil_tag = author.find("AffiliationInfo")
-            if not affil_tag:
+            affil_info = auth.find("AffiliationInfo")
+            if not affil_info or not affil_info.text:
                 continue
 
-            affil_text = affil_tag.text.lower()
-            affil_orig = affil_tag.text.strip()
+            affil = affil_info.text.strip()
+            affil_lower = affil.lower()
 
-            # Heuristic: if none of the academic keywords appear, it's non-academic
-            is_academic = any(keyword in affil_text for keyword in ACADEMIC_KEYWORDS)
-            is_company = any(keyword in affil_text for keyword in COMPANY_KEYWORDS)
+            # Determine if author is academic or company-affiliated
+            is_academic = any(term in affil_lower for term in academic_terms)
+            is_industry = any(term in affil_lower for term in business_terms)
 
             if not is_academic:
-                non_academic_authors.append(fullname)
+                non_academic.append(full_name)
 
-                if is_company:
-                    company_affiliations.append(affil_orig)
+                if is_industry:
+                    companies.append(affil)
 
-                # Email detection
-                if "@" in affil_text and corresponding_email == "N/A":
-                    match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", affil_orig)
-                    if match:
-                        corresponding_email = match.group()
+                if "@" in affil_lower and contact_email == "N/A":
+                    email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", affil)
+                    if email_match:
+                        contact_email = email_match.group()
 
-        if non_academic_authors:
-            results.append({
+        if non_academic:
+            final_data.append({
                 "PubmedID": pmid,
-                "Title": title,
+                "Title": article_title,
                 "Publication Date": pub_date,
-                "Non-academic Author(s)": "; ".join(non_academic_authors),
-                "Company Affiliation(s)": "; ".join(company_affiliations),
-                "Corresponding Author Email": corresponding_email
+                "Non-academic Author(s)": "; ".join(non_academic),
+                "Company Affiliation(s)": "; ".join(companies),
+                "Corresponding Author Email": contact_email
             })
 
-    return results
+    return final_data

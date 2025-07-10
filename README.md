@@ -78,3 +78,12 @@ this is the sample output of the on eof the paper which is in the csv form .
 |-----------|------------------------------------------------------------------------------------------------|------------------|----------------------------------------------------------------------|------------------------|----------------------------------------|
 | 40634697  | Improved prediction of MAPKi response duration in melanoma patients using genomic data and machine learning. | 2025-Jul         | Sarah Dandou; Véronique D'Hondt; Jérôme Solassol; Peter J Coopman; Ovidiu Radulescu; Romain M Larive |                        | ovidiu.radulescu@umontpellier.fr      |
 
+
+
+
+
+Package Availability
+This package has been published to TestPyPI for testing purposes.
+
+View on TestPyPI: https://test.pypi.org/project/krish-paper-fetcher/0.1.0/
+

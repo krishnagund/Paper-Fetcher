@@ -1,7 +1,6 @@
-# paper_fetcher/main.py
 import typer
 import pandas as pd
-from paper_fetcher.fetcher import fetch_pubmed_ids, fetch_details
+from paper_fetcher.fetcher import search_pubmed, extract_article_data
 
 app = typer.Typer()
 
@@ -14,11 +13,11 @@ def fetch(
     if debug:
         typer.echo(f"Fetching PubMed IDs for query: {query}")
     try:
-        ids = fetch_pubmed_ids(query)
+        ids = search_pubmed(query)
         if debug:
             typer.echo(f"Found {len(ids)} papers.")
 
-        data = fetch_details(ids)
+        data = extract_article_data(ids)
         df = pd.DataFrame(data)
 
         if file:
